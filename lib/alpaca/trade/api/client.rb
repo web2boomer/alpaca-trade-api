@@ -276,6 +276,9 @@ module Alpaca
           if response.status == 401
             raise UnauthorizedError, JSON.parse(response.body)['message']
           end
+          if response.status == 403
+            raise InvalidSubscription, JSON.parse(response.body)['message']
+          end          
           if response.status == 429
             raise RateLimitedError, JSON.parse(response.body)['message']
           end

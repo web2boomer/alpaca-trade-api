@@ -15,6 +15,7 @@ module Alpaca
       class OrderNotCancelable < Error; end
       class RateLimitedError < Error; end
       class UnauthorizedError < Error; end
+      class InvalidSubscription < Error; end
     end
   end
 end
