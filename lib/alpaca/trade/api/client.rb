@@ -49,6 +49,35 @@ module Alpaca
         end
 
         # {
+        #   "quotes": {
+        #     "NET": {
+        #       "ap": 81.86,
+        #       "as": 4,
+        #       "ax": "P",
+        #       "bp": 81.48,
+        #       "bs": 4,
+        #       "bx": "P",
+        #       "c": [
+        #         "R"
+        #       ],
+        #       "t": "2024-01-25T22:20:56.83785216Z",
+        #       "z": "A"
+        #     }
+        #   }
+        # }
+        def latest_quote(symbols:)
+          validate_symbols(symbols)
+          response = get_request(data_endpoint, "v2/stocks/quotes/latest", { symbols: prepare_symbols(symbols) })
+          json = JSON.parse(response.body)
+
+          hash = { "next_page_token" => json["next_page_token"], "quotes" => {} }
+          ensure_symbols_are_array(symbols).each do |symbol|
+            hash["quotes"][symbol] = Quote.new(json["quotes"][symbol]) 
+          end   
+          hash       
+        end          
+
+        # {
         #   "bars": {
         #     "AAPL": [
         #       {
@@ -69,9 +98,8 @@ module Alpaca
           validate_timeframe(timeframe)
           validate_symbols(symbols)
 
-          symbols = Array(symbols)
           params = {
-            symbols: symbols.join(','),
+            symbols: prepare_symbols(symbols),
             limit: limit,
             timeframe: timeframe,
             feed: feed
@@ -87,10 +115,10 @@ module Alpaca
 
           json = JSON.parse(response.body)
           hash = { "next_page_token" => json["next_page_token"], "bars" => {} }
-          symbols.each do |symbol|
+          ensure_symbols_are_array(symbols).each do |symbol|
             hash["bars"][symbol] = json["bars"][symbol]&.map { |bar| Bar.new(bar) } || []
           end
-          hash.merge({ 'next_page_token' => json['next_page_token'] })
+          hash
         end
 
         def calendar(start_date: Date.today, end_date: (Date.today + 30))
@@ -271,6 +299,17 @@ module Alpaca
           possibly_raise_exception(response)
           response
         end
+
+        def ensure_symbols_are_array(symbols)
+          symbols = [symbols] if symbols.is_a?(String)
+          symbols
+        end
+
+        def prepare_symbols(symbols)
+          symbols = ensure_symbols_are_array(symbols)
+          symbols.join(',')
+        end
+
 
         def possibly_raise_exception(response)
           if response.status == 401

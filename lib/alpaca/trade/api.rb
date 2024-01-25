@@ -13,6 +13,7 @@ require 'alpaca/trade/api/non_trade_activity'
 require 'alpaca/trade/api/order'
 require 'alpaca/trade/api/position'
 require 'alpaca/trade/api/trade_activity'
+require 'alpaca/trade/api/quote'
 
 require 'alpaca/trade/api/client'
 require 'alpaca/trade/api/errors'
