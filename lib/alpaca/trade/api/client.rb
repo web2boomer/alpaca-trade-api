@@ -9,8 +9,6 @@ module Alpaca
       class Client
         attr_reader :data_endpoint, :endpoint, :key_id, :key_secret
 
-        TIMEFRAMES = ['minute', '1Min', '5Min', '15Min', 'day', '1D']
-
         def initialize(endpoint: Alpaca::Trade::Api.configuration.endpoint,
                        key_id: Alpaca::Trade::Api.configuration.key_id,
                        key_secret: Alpaca::Trade::Api.configuration.key_secret)
@@ -95,7 +93,6 @@ module Alpaca
         #   "next_page_token": "QUFQTHxNfDIwMjItMDEtMDNUMDk6MDA6MDAuMDAwMDAwMDAwWg=="
         # }
         def bars(timeframe: '1D', symbols:, limit: 100, start_date: nil, end_date: nil, feed: 'sip', asof: nil)
-          validate_timeframe(timeframe)
           validate_symbols(symbols)
 
           params = {
@@ -112,6 +109,7 @@ module Alpaca
 
           response = get_request(data_endpoint, "v2/stocks/bars", params)
           raise InvalidRequest, JSON.parse(response.body)['message'] if response.status == 404
+          raise InvalidParameters, JSON.parse(response.body)['message'] if response.status == 400
 
           json = JSON.parse(response.body)
           hash = { "next_page_token" => json["next_page_token"], "bars" => {} }
@@ -324,11 +322,6 @@ module Alpaca
           if response.status == 500
             raise InternalServerError, JSON.parse(response.body)['message']
           end
-        end
-
-        def validate_timeframe(timeframe)
-          return if TIMEFRAMES.include?(timeframe)
-          raise ArgumentError, "Invalid timeframe: #{timeframe}. Valid arguments are: #{TIMEFRAMES}"
         end
 
         def validate_symbols(symbols)
