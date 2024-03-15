@@ -69,9 +69,11 @@ module Alpaca
           json = JSON.parse(response.body)
 
           hash = { "next_page_token" => json["next_page_token"], "quotes" => {} }
-          ensure_symbols_are_array(symbols).each do |symbol|
-            hash["quotes"][symbol] = Quote.new(json["quotes"][symbol]) 
-          end   
+          if hash["quotes"].count > 0
+            ensure_symbols_are_array(symbols).each do |symbol|
+              hash["quotes"][symbol] = Quote.new(json["quotes"][symbol]) 
+            end   
+          end
           hash       
         end          
 
@@ -83,7 +85,7 @@ module Alpaca
         #         "o": 178.26,
         #         "h": 178.26,
         #         "l": 178.21,
-        #         "c": 178.21,
+        #         "c": 178.21,git 
         #         "v": 1118,
         #         "n": 65,
         #         "vw": 178.235733
