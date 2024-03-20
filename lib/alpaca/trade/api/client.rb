@@ -69,7 +69,7 @@ module Alpaca
           json = JSON.parse(response.body)
 
           hash = { "next_page_token" => json["next_page_token"], "quotes" => {} }
-          if hash["quotes"].count > 0
+          if json["quotes"].count > 0
             ensure_symbols_are_array(symbols).each do |symbol|
               hash["quotes"][symbol] = Quote.new(json["quotes"][symbol]) 
             end   
