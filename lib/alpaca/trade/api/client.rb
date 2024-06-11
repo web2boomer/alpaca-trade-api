@@ -313,16 +313,16 @@ module Alpaca
 
         def possibly_raise_exception(response)
           if response.status == 401
-            raise UnauthorizedError, JSON.parse(response.body)['message']
+            raise UnauthorizedError, response.body
           end
           if response.status == 403
-            raise InvalidSubscription, JSON.parse(response.body)['message']
+            raise InvalidSubscription, response.body
           end          
           if response.status == 429
-            raise RateLimitedError, JSON.parse(response.body)['message']
+            raise RateLimitedError,  response.body
           end
           if response.status == 500
-            raise InternalServerError, JSON.parse(response.body)['message']
+            raise InternalServerError, response.body
           end
         end
 
