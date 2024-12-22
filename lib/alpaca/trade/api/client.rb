@@ -324,6 +324,9 @@ module Alpaca
           if response.status == 500
             raise InternalServerError, response.body
           end
+          if response.status == 502
+            raise BadGatewayError, response.body
+          end          
         end
 
         def validate_symbols(symbols)
