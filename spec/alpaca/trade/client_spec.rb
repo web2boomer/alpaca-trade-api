@@ -31,6 +31,10 @@ RSpec.describe Alpaca::Trade::Api::Client do
       expect_any_instance_of(Faraday::Response).to receive(:status).at_least(:once).and_return(500)
       expect { subject.account }.to raise_error(Alpaca::Trade::Api::InternalServerError)
     end
+
+    it 'raises BadGatewayError when status code is 502', :vcr do
+      expect { subject.account }.to raise_error(Alpaca::Trade::Api::BadGatewayError)
+    end
   end
 
   describe '#account' do
@@ -58,6 +62,21 @@ RSpec.describe Alpaca::Trade::Api::Client do
     it 'raises an exception when the activity type requested is invalid', :vcr do
       expect { subject.account_activities(activity_type: 'INVALID') }.to raise_error(Alpaca::Trade::Api::InvalidActivityType)
     end
+
+    it 'raises an exception when date and until_time are both provided' do
+      expect {
+        subject.account_activities(activity_type: 'FILL', date: Date.today, until_time: Date.today)
+      }.to raise_error(Alpaca::Trade::Api::InvalidParameters)
+    end
+  end
+
+  describe '#latest_quote' do
+    it 'returns Quote objects for a symbol', :vcr do
+      result = subject.latest_quote(symbols: 'NET')
+      expect(result['quotes']['NET']).to be_an(Alpaca::Trade::Api::Quote)
+      expect(result['quotes']['NET'].bid_price).to eq(BigDecimal('81.48'))
+      expect(result['quotes']['NET'].ask_price).to eq(BigDecimal('81.86'))
+    end
   end
 
   describe '#asset' do
@@ -84,7 +103,7 @@ RSpec.describe Alpaca::Trade::Api::Client do
 
   describe '#bars' do
     it 'returns Bar objects for one symbol as Array', :vcr do
-      bars = subject.bars(timeframe: '1D', symbols: ['CRM'], start_date: Date.today - 10)
+      bars = subject.bars(timeframe: '1D', symbols: ['CRM'], start_date: Date.new(2023, 11, 22))
       expect(bars['bars']['CRM']).to be_an(Array)
 
       bar = bars['bars']['CRM'].first
@@ -93,7 +112,7 @@ RSpec.describe Alpaca::Trade::Api::Client do
     end
 
     it 'returns Bar objects for one symbol as String', :vcr do
-      bars = subject.bars(timeframe: '1D', symbols: 'CRM', start_date: Date.today - 10)
+      bars = subject.bars(timeframe: '1D', symbols: 'CRM', start_date: Date.new(2023, 11, 22))
       expect(bars['bars']['CRM']).to be_an(Array)
 
       bar = bars['bars']['CRM'].first
@@ -102,7 +121,7 @@ RSpec.describe Alpaca::Trade::Api::Client do
     end
 
     it 'returns Bar objects for multiple symbols', :vcr do
-      bars = subject.bars(timeframe: '1D', symbols: %w[CRM FB AMZN], start_date: Date.today - 10)
+      bars = subject.bars(timeframe: '1D', symbols: %w[CRM FB AMZN], start_date: Date.new(2023, 11, 22))
       expect(bars['bars']['FB']).to be_an(Array)
 
       bar = bars['bars']['AMZN'].first
@@ -110,14 +129,20 @@ RSpec.describe Alpaca::Trade::Api::Client do
     end
 
     it 'accepts limit as parameter', :vcr do
-      bars = subject.bars(timeframe: '1D', symbols: ['CRM'], limit: 10, start_date: Date.today - 100)
+      bars = subject.bars(timeframe: '1D', symbols: ['CRM'], limit: 10, start_date: Date.new(2023, 8, 24))
       expect(bars['bars']['CRM']).to be_an(Array)
       expect(bars['bars']['CRM'].size).to eq(10)
     end
 
     it 'doesnt accept invalid time frames' do
       expect {
-        subject.bars(timeframe: 'bogus', symbols: 'CRM', limit: 10, start_date: Date.today - 100)
+        subject.bars(timeframe: 'bogus', symbols: 'CRM', limit: 10, start_date: Date.new(2023, 8, 24))
+      }.to raise_error(ArgumentError)
+    end
+
+    it 'doesnt accept invalid symbols' do
+      expect {
+        subject.bars(timeframe: '1D', symbols: [123], start_date: Date.new(2023, 8, 24))
       }.to raise_error(ArgumentError)
     end
   end

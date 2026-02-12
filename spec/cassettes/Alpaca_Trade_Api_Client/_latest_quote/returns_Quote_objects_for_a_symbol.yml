@@ -1,0 +1,33 @@
+---
+http_interactions:
+- request:
+    method: get
+    uri: https://data.alpaca.markets/v2/stocks/quotes/latest?symbols=NET
+    body:
+      encoding: US-ASCII
+      string: ''
+    headers:
+      User-Agent:
+      - Faraday v1.10.0
+      Apca-Api-Key-Id:
+      - "<KEY ID>"
+      Apca-Api-Secret-Key:
+      - "<KEY SECRET>"
+      Accept-Encoding:
+      - gzip;q=1.0,deflate;q=0.6,identity;q=0.3
+      Accept:
+      - "*/*"
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      Date:
+      - Thu, 25 Jan 2024 22:21:00 GMT
+      Content-Type:
+      - application/json; charset=UTF-8
+    body:
+      encoding: UTF-8
+      string: '{"quotes":{"NET":{"ap":81.86,"as":4,"ax":"P","bp":81.48,"bs":4,"bx":"P","c":["R"],"t":"2024-01-25T22:20:56.83785216Z","z":"A"}}}'
+  recorded_at: Thu, 25 Jan 2024 22:21:00 GMT
+recorded_with: VCR 6.1.0

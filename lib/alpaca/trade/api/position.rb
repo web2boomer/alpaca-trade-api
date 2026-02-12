@@ -7,7 +7,7 @@ module Alpaca
         attr_reader :asset_id, :symbol, :exchange, :asset_class, :avg_entry_price,
           :qty, :side, :market_value, :cost_basis, :unrealized_pl, :unrealized_plpc,
           :unrealized_intraday_pl, :unrealized_intraday_plpc, :current_price,
-          :lastday_price, :change_today
+          :lastday_price, :change_today, :asset_marginable
 
         def initialize(json)
           @asset_id = json['asset_id']
@@ -26,6 +26,7 @@ module Alpaca
           @current_price = json['current_price']
           @lastday_price = json['lastday_price']
           @change_today = json['change_today']
+          @asset_marginable = json['asset_marginable']
         end
       end
     end

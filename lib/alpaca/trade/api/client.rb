@@ -24,10 +24,10 @@ module Alpaca
         end
 
         def account_activities(activity_type:, date:nil, after:nil, until_time:nil, direction:nil, page_size:nil, page_token:nil)
-          if date.present? && (until_time.present? || after.present?)
+          if !date.nil? && (!until_time.nil? || !after.nil?)
             raise InvalidParameters, 'date cannot be used with either until_time or after'
           end
-          params = { date:date, until_time:until_time, after:after, direction:direction, page_size:page_size, page_token:page_token }
+          params = { date:date, until_time:until_time, after:after, direction:direction, page_size:page_size, page_token:page_token }.compact
           response = get_request(endpoint, "/v2/account/activities/#{activity_type}", params)
           raise InvalidActivityType, JSON.parse(response.body)['message'] if response.status == 422
           json = JSON.parse(response.body)
@@ -94,8 +94,11 @@ module Alpaca
         #   },
         #   "next_page_token": "QUFQTHxNfDIwMjItMDEtMDNUMDk6MDA6MDAuMDAwMDAwMDAwWg=="
         # }
+        VALID_TIMEFRAMES = %w[1Min 5Min 15Min 30Min 1Hour 1Day 1D 1Week 1Month].freeze
+
         def bars(timeframe: '1D', symbols:, limit: 100, start_date: nil, end_date: nil, feed: 'sip', asof: nil)
           validate_symbols(symbols)
+          validate_timeframe(timeframe)
 
           params = {
             symbols: prepare_symbols(symbols),
@@ -315,9 +318,6 @@ module Alpaca
           if response.status == 401
             raise UnauthorizedError, response.body
           end
-          if response.status == 403
-            raise InvalidSubscription, response.body
-          end          
           if response.status == 429
             raise RateLimitedError,  response.body
           end
@@ -326,13 +326,18 @@ module Alpaca
           end
           if response.status == 502
             raise BadGatewayError, response.body
-          end          
+          end
         end
 
         def validate_symbols(symbols)
           return if symbols.is_a?(String)
           return if symbols.is_a?(Array) && symbols.all?{ |symbol| symbol.is_a?(String) }
           raise ArgumentError, "Invalid symbols: #{symbols.inspect}. Symbols must be a String or an array of strings."
+        end
+
+        def validate_timeframe(timeframe)
+          return if VALID_TIMEFRAMES.include?(timeframe)
+          raise ArgumentError, "Invalid timeframe: #{timeframe.inspect}. Valid timeframes are: #{VALID_TIMEFRAMES.join(', ')}."
         end
       end
     end
