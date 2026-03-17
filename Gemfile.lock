@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    alpaca-trade-api (0.9.2)
+    alpaca-trade-api (0.10.0)
       faraday (>= 0.15, < 2.0)
 
 GEM
@@ -36,7 +36,7 @@ GEM
     faraday-net_http_persistent (1.2.0)
     faraday-patron (1.0.0)
     faraday-rack (1.0.0)
-    faraday-retry (1.0.3)
+    faraday-retry (1.0.4)
     hashdiff (1.0.1)
     multipart-post (2.4.1)
     public_suffix (4.0.6)

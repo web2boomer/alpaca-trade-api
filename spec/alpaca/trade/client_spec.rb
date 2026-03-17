@@ -309,6 +309,97 @@ RSpec.describe Alpaca::Trade::Api::Client do
     end
   end
 
+  describe '#option_contracts' do
+    include WebMock::API
+
+    let(:contracts_response) do
+      {
+        'option_contracts' => [
+          {
+            'symbol' => 'AAPL250321C00200000',
+            'type' => 'call',
+            'strike_price' => '200.00',
+            'expiration_date' => '2025-03-21',
+            'open_interest' => 1500,
+            'status' => 'active'
+          },
+          {
+            'symbol' => 'AAPL250321P00200000',
+            'type' => 'put',
+            'strike_price' => '200.00',
+            'expiration_date' => '2025-03-21',
+            'open_interest' => 1200,
+            'status' => 'active'
+          }
+        ]
+      }
+    end
+
+    before do
+      stub_request(:get, /#{subject.endpoint}\/v2\/options\/contracts/)
+        .to_return(status: 200, body: contracts_response.to_json, headers: { 'Content-Type' => 'application/json' })
+    end
+
+    it 'returns option contracts for a symbol' do
+      result = subject.option_contracts(underlying_symbols: 'AAPL')
+      expect(result['option_contracts']).to be_an(Array)
+      expect(result['option_contracts'].size).to eq(2)
+      expect(result['option_contracts'].first['symbol']).to eq('AAPL250321C00200000')
+    end
+
+    it 'sends expiration date filters' do
+      subject.option_contracts(
+        underlying_symbols: 'AAPL',
+        expiration_date_gte: '2025-03-01',
+        expiration_date_lte: '2025-03-31',
+      )
+      assert_requested(:get, /v2\/options\/contracts/,
+        query: hash_including('expiration_date_gte' => '2025-03-01', 'expiration_date_lte' => '2025-03-31'))
+    end
+  end
+
+  describe '#option_snapshots' do
+    include WebMock::API
+
+    let(:snapshots_response) do
+      {
+        'snapshots' => {
+          'AAPL250321C00200000' => {
+            'impliedVolatility' => 0.3245,
+            'latestQuote' => { 'bp' => 5.10, 'ap' => 5.30 }
+          },
+          'AAPL250321P00200000' => {
+            'impliedVolatility' => 0.3180,
+            'latestQuote' => { 'bp' => 4.80, 'ap' => 5.00 }
+          }
+        }
+      }
+    end
+
+    before do
+      stub_request(:get, /data\.alpaca\.markets\/v1beta1\/options\/snapshots/)
+        .to_return(status: 200, body: snapshots_response.to_json, headers: { 'Content-Type' => 'application/json' })
+    end
+
+    it 'returns snapshots for option symbols' do
+      result = subject.option_snapshots(symbols: ['AAPL250321C00200000', 'AAPL250321P00200000'])
+      expect(result['snapshots']).to be_a(Hash)
+      expect(result['snapshots'].keys.size).to eq(2)
+      expect(result['snapshots']['AAPL250321C00200000']['impliedVolatility']).to eq(0.3245)
+    end
+
+    it 'accepts a single symbol as a string' do
+      result = subject.option_snapshots(symbols: 'AAPL250321C00200000')
+      expect(result['snapshots']).to be_a(Hash)
+    end
+
+    it 'defaults feed to indicative' do
+      subject.option_snapshots(symbols: 'AAPL250321C00200000')
+      assert_requested(:get, /options\/snapshots/,
+        query: hash_including('feed' => 'indicative'), at_least_times: 1)
+    end
+  end
+
   describe '#replace_order' do
     let(:canceled_order_id) { '7ab88b48-b57a-48bf-aa58-89496b23757d' }
     let(:invalid_id) { '001c0b29-5bc9-45c4-bd32-5ba323c997b3' }

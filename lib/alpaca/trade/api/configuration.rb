@@ -8,7 +8,7 @@ module Alpaca
         attr_reader :data_endpoint
 
         def initialize
-          @endpoint = 'https://paper-api.alpaca.markets'
+          @endpoint = ENV.fetch('ALPACA_BASE_URL', 'https://api.alpaca.markets')
           @data_endpoint = 'https://data.alpaca.markets'
           @key_id = ENV['ALPACA_API_KEY_ID']
           @key_secret = ENV['ALPACA_API_SECRET_KEY']

@@ -236,6 +236,27 @@ module Alpaca
           json.map { |item| Position.new(item) }
         end
 
+        def option_contracts(underlying_symbols:, expiration_date_gte: nil, expiration_date_lte: nil, status: 'active', limit: 500)
+          params = {
+            underlying_symbols: underlying_symbols,
+            expiration_date_gte: expiration_date_gte,
+            expiration_date_lte: expiration_date_lte,
+            status: status,
+            limit: limit,
+          }.compact
+          response = get_request(endpoint, 'v2/options/contracts', params)
+          JSON.parse(response.body)
+        end
+
+        def option_snapshots(symbols:, feed: 'indicative')
+          params = {
+            symbols: prepare_symbols(symbols),
+            feed: feed,
+          }
+          response = get_request(data_endpoint, 'v1beta1/options/snapshots', params)
+          JSON.parse(response.body)
+        end
+
         def replace_order(id:, qty: nil, time_in_force: nil, limit_price: nil,
                           stop_price: nil, client_order_id: nil)
 

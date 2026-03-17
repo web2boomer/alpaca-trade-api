@@ -14,13 +14,33 @@ RSpec.describe Alpaca::Trade::Api do
     end
 
     it 'defaults to expected values' do
-      expect(ENV).to receive(:[]).with('ALPACA_API_KEY_ID').and_return(key_id).twice
-      expect(ENV).to receive(:[]).with('ALPACA_API_SECRET_KEY').and_return(key_secret).twice
+      saved = ENV.to_h.slice('ALPACA_API_KEY_ID', 'ALPACA_API_SECRET_KEY', 'ALPACA_BASE_URL')
+      ENV['ALPACA_API_KEY_ID'] = key_id
+      ENV['ALPACA_API_SECRET_KEY'] = key_secret
+      ENV.delete('ALPACA_BASE_URL')
+      Alpaca::Trade::Api.reset
 
-      expect(Alpaca::Trade::Api.configuration.data_endpoint).to eq('https://data.alpaca.markets')
+      config = Alpaca::Trade::Api.configuration
+      expect(config.data_endpoint).to eq('https://data.alpaca.markets')
+      expect(config.endpoint).to eq('https://api.alpaca.markets')
+      expect(config.key_id).to eq(key_id)
+      expect(config.key_secret).to eq(key_secret)
+    ensure
+      saved.each { |k, v| ENV[k] = v }
+      (saved.keys - saved.compact.keys).each { |k| ENV.delete(k) }
+    end
+
+    it 'uses ALPACA_BASE_URL env var when set' do
+      saved = ENV.to_h.slice('ALPACA_API_KEY_ID', 'ALPACA_API_SECRET_KEY', 'ALPACA_BASE_URL')
+      ENV['ALPACA_API_KEY_ID'] = key_id
+      ENV['ALPACA_API_SECRET_KEY'] = key_secret
+      ENV['ALPACA_BASE_URL'] = 'https://paper-api.alpaca.markets'
+      Alpaca::Trade::Api.reset
+
       expect(Alpaca::Trade::Api.configuration.endpoint).to eq('https://paper-api.alpaca.markets')
-      expect(Alpaca::Trade::Api.configuration.key_id).to eq(key_id)
-      expect(Alpaca::Trade::Api.configuration.key_secret).to eq(key_secret)
+    ensure
+      saved.each { |k, v| ENV[k] = v }
+      saved.each { |k, _| ENV.delete(k) unless saved[k] }
     end
 
     it 'lets user configure extra_keys' do
