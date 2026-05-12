@@ -96,7 +96,10 @@ module Alpaca
         # }
         VALID_TIMEFRAMES = %w[1Min 5Min 15Min 30Min 1Hour 1Day 1D 1Week 1Month].freeze
 
-        def bars(timeframe: '1D', symbols:, limit: 100, start_date: nil, end_date: nil, feed: 'sip', asof: nil)
+        # `adjustment` — one of "raw" (default; matches Alpaca API default),
+        # "split", "dividend", or "all". Pass "all" for any multi-day analysis
+        # so corporate actions don't show up as fake price moves.
+        def bars(timeframe: '1D', symbols:, limit: 100, start_date: nil, end_date: nil, feed: 'sip', asof: nil, adjustment: nil)
           validate_symbols(symbols)
           validate_timeframe(timeframe)
 
@@ -111,6 +114,8 @@ module Alpaca
 
           params[:asof] = asof.strftime("%Y-%m-%d") if asof.is_a?(Date) || asof.is_a?(Time)
           params[:asof] ||= asof if asof.is_a?(String)
+
+          params[:adjustment] = adjustment if adjustment
 
           response = get_request(data_endpoint, "v2/stocks/bars", params)
           raise InvalidRequest, JSON.parse(response.body)['message'] if response.status == 404
@@ -289,7 +294,10 @@ module Alpaca
         end
 
         def get_request(endpoint, uri, params = {})
-          conn = Faraday.new(url: endpoint)
+          conn = Faraday.new(url: endpoint) do |f|
+            f.options.open_timeout = 5
+            f.options.timeout = 15
+          end
           response = conn.get(uri) do |req|
             params.each { |k, v| req.params[k.to_s] = v }
             req.headers['APCA-API-KEY-ID'] = key_id
