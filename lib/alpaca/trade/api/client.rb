@@ -164,6 +164,8 @@ module Alpaca
         def close_position(symbol:)
           response = delete_request(endpoint, "v2/positions/#{symbol}")
           raise NoPositionForSymbol, JSON.parse(response.body)['message'] if response.status == 404
+          # e.g. 403 "insufficient qty available" when open orders hold shares
+          raise PositionNotClosable, JSON.parse(response.body)['message'] unless (200..299).cover?(response.status)
 
           Position.new(JSON.parse(response.body))
         end

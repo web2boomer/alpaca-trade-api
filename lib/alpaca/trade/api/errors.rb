@@ -14,6 +14,7 @@ module Alpaca
       class MissingParameters < Error; end
       class NoPositionForSymbol < Error; end
       class OrderNotCancelable < Error; end
+      class PositionNotClosable < Error; end
       class RateLimitedError < Error; end
       class UnauthorizedError < Error; end
       class InvalidSubscription < Error; end
