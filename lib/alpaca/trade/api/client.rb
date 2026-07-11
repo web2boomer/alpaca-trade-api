@@ -216,6 +216,28 @@ module Alpaca
           Order.new(JSON.parse(response.body))
         end
 
+        # Multi-leg options order (order_class "mleg"). `legs` is an array of
+        # { symbol:, ratio_qty:, side:, position_intent: } hashes. `limit_price`
+        # is the net price for the whole structure — negative for a net credit.
+        def new_mleg_order(legs:, qty:, type: 'limit', time_in_force: 'day',
+          limit_price: nil, client_order_id: nil)
+
+          params = {
+            order_class: 'mleg',
+            qty: qty.to_s,
+            type: type,
+            time_in_force: time_in_force,
+            limit_price: limit_price&.to_s,
+            client_order_id: client_order_id,
+            legs: legs
+          }
+          response = post_request(endpoint, 'v2/orders', params.compact)
+          raise InsufficientFunds, JSON.parse(response.body)['message'] if response.status == 403
+          raise MissingParameters, JSON.parse(response.body)['message'] if response.status == 422
+
+          Order.new(JSON.parse(response.body))
+        end
+
         def order(id:)
           response = get_request(endpoint, "v2/orders/#{id}")
           raise InvalidOrderId, JSON.parse(response.body)['message'] if response.status == 404
