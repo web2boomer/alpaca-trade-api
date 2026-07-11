@@ -309,6 +309,101 @@ RSpec.describe Alpaca::Trade::Api::Client do
     end
   end
 
+  describe '#new_mleg_order' do
+    include WebMock::API
+
+    let(:legs) do
+      [
+        { symbol: 'AAPL250321C00200000', ratio_qty: 1, side: 'buy', position_intent: 'buy_to_open' },
+        { symbol: 'AAPL250321P00200000', ratio_qty: 1, side: 'sell', position_intent: 'sell_to_open' },
+      ]
+    end
+
+    let(:order_response) do
+      {
+        'id' => 'mleg-order-id',
+        'client_order_id' => 'MLEG_ORDER_ID',
+        'created_at' => '2025-03-01T12:00:00Z',
+        'updated_at' => '2025-03-01T12:00:00Z',
+        'submitted_at' => '2025-03-01T12:00:00Z',
+        'filled_at' => nil,
+        'expired_at' => nil,
+        'canceled_at' => nil,
+        'failed_at' => nil,
+        'asset_id' => nil,
+        'symbol' => nil,
+        'asset_class' => 'us_option',
+        'qty' => '1',
+        'filled_qty' => '0',
+        'filled_avg_price' => nil,
+        'order_class' => 'mleg',
+        'type' => 'limit',
+        'side' => nil,
+        'time_in_force' => 'day',
+        'limit_price' => '-1.50',
+        'stop_price' => nil,
+        'status' => 'accepted',
+        'extended_hours' => false,
+        'legs' => [
+          {
+            'id' => 'leg-1',
+            'symbol' => 'AAPL250321C00200000',
+            'qty' => '1',
+            'side' => 'buy',
+            'type' => 'limit',
+            'status' => 'accepted',
+            'legs' => [],
+          },
+          {
+            'id' => 'leg-2',
+            'symbol' => 'AAPL250321P00200000',
+            'qty' => '1',
+            'side' => 'sell',
+            'type' => 'limit',
+            'status' => 'accepted',
+            'legs' => [],
+          },
+        ],
+      }
+    end
+
+    it 'places a new multi-leg Order' do
+      stub_request(:post, "#{subject.endpoint}/v2/orders")
+        .to_return(status: 200, body: order_response.to_json, headers: { 'Content-Type' => 'application/json' })
+
+      order = subject.new_mleg_order(
+        legs: legs,
+        qty: 1,
+        limit_price: -1.50,
+        client_order_id: 'MLEG_ORDER_ID',
+      )
+
+      expect(order).to be_an(Alpaca::Trade::Api::Order)
+      expect(order.order_class).to eq('mleg')
+      expect(order.legs.size).to eq(2)
+    end
+
+    it 'raises an exception when buying power is not sufficient' do
+      stub_request(:post, "#{subject.endpoint}/v2/orders")
+        .to_return(status: 403, body: { message: 'insufficient buying power' }.to_json,
+                   headers: { 'Content-Type' => 'application/json' })
+
+      expect {
+        subject.new_mleg_order(legs: legs, qty: 1, limit_price: -1.50)
+      }.to raise_error(Alpaca::Trade::Api::InsufficientFunds)
+    end
+
+    it 'raises an exception when required parameters are not provided' do
+      stub_request(:post, "#{subject.endpoint}/v2/orders")
+        .to_return(status: 422, body: { message: 'limit orders require only limit price' }.to_json,
+                   headers: { 'Content-Type' => 'application/json' })
+
+      expect {
+        subject.new_mleg_order(legs: legs, qty: 1)
+      }.to raise_error(Alpaca::Trade::Api::MissingParameters)
+    end
+  end
+
   describe '#option_contracts' do
     include WebMock::API
 
