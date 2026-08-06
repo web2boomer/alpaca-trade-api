@@ -167,7 +167,8 @@ module Alpaca
           # e.g. 403 "insufficient qty available" when open orders hold shares
           raise PositionNotClosable, JSON.parse(response.body)['message'] unless (200..299).cover?(response.status)
 
-          Position.new(JSON.parse(response.body))
+          # DELETE /v2/positions/{symbol} returns the liquidating Order, not a Position.
+          Order.new(JSON.parse(response.body))
         end
 
         def close_positions
@@ -178,7 +179,8 @@ module Alpaca
             {
               'symbol' => item['symbol'],
               'status' => item['status'],
-              'body' => Position.new(item['body']),
+              # Each item body is the liquidating Order for that symbol.
+              'body' => Order.new(item['body']),
             }
           end
         end

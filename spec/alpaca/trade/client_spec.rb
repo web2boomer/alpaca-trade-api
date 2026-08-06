@@ -194,10 +194,10 @@ RSpec.describe Alpaca::Trade::Api::Client do
     end
 
     it 'closes an open position', :vcr do
-      closed_position = subject.close_position(symbol: 'AIV')
+      close_order = subject.close_position(symbol: 'AIV')
 
-      expect(closed_position).to be_an(Alpaca::Trade::Api::Position)
-      expect(closed_position.symbol).to eq('AIV')
+      expect(close_order).to be_an(Alpaca::Trade::Api::Order)
+      expect(close_order.symbol).to eq('AIV')
     end
   end
 
@@ -211,7 +211,7 @@ RSpec.describe Alpaca::Trade::Api::Client do
       position_response = closed_positions.first
       expect(position_response['symbol']).to eq(existing_position_symbol)
       expect(position_response['status']).to eq(200)
-      expect(position_response['body']).to be_an(Alpaca::Trade::Api::Position)
+      expect(position_response['body']).to be_an(Alpaca::Trade::Api::Order)
     end
 
     it 'returns an empty array when there are no positions', :vcr do
