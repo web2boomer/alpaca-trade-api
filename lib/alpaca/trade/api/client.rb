@@ -23,16 +23,73 @@ module Alpaca
           Account.new(JSON.parse(response.body))
         end
 
-        def account_activities(activity_type:, date:nil, after:nil, until_time:nil, direction:nil, page_size:nil, page_token:nil)
+        def account_activities(activity_type: nil, date:nil, after:nil, until_time:nil, direction:nil, page_size:nil, page_token:nil)
           if !date.nil? && (!until_time.nil? || !after.nil?)
             raise InvalidParameters, 'date cannot be used with either until_time or after'
           end
           params = { date:date, until_time:until_time, after:after, direction:direction, page_size:page_size, page_token:page_token }.compact
-          response = get_request(endpoint, "/v2/account/activities/#{activity_type}", params)
+          path = activity_type ? "/v2/account/activities/#{activity_type}" : '/v2/account/activities'
+          response = get_request(endpoint, path, params)
           raise InvalidActivityType, JSON.parse(response.body)['message'] if response.status == 422
           json = JSON.parse(response.body)
-          activity_class = (TradeActivity::ATTRIBUTES - json.first.to_h.keys).none? ? TradeActivity : NonTradeActivity
-          json.map { |item| activity_class.new(item) }
+          return [] if json.nil? || json.empty?
+
+          json.map do |item|
+            activity_class = (TradeActivity::ATTRIBUTES - item.to_h.keys).none? ? TradeActivity : NonTradeActivity
+            activity_class.new(item)
+          end
+        end
+
+        def account_configurations
+          response = get_request(endpoint, 'v2/account/configurations')
+          AccountConfiguration.new(JSON.parse(response.body))
+        end
+
+        def update_account_configurations(**attrs)
+          response = patch_request(endpoint, 'v2/account/configurations', attrs.compact)
+          AccountConfiguration.new(JSON.parse(response.body))
+        end
+
+        def announcements(ca_types:, since:, until_date:, symbol: nil, cusip: nil, date_type: nil)
+          params = {
+            ca_types: Array(ca_types).join(','),
+            since: since,
+            until: until_date,
+            symbol: symbol,
+            cusip: cusip,
+            date_type: date_type
+          }.compact
+          response = get_request(endpoint, 'v2/corporate_actions/announcements', params)
+          json = JSON.parse(response.body)
+          json.map { |item| Announcement.new(item) }
+        end
+
+        def announcement(id:)
+          response = get_request(endpoint, "v2/corporate_actions/announcements/#{id}")
+          raise InvalidRequest, JSON.parse(response.body)['message'] if response.status == 404
+
+          Announcement.new(JSON.parse(response.body))
+        end
+
+        def portfolio_history(period: nil, timeframe: nil, start_time: nil, end_time: nil,
+                              date_end: nil, extended_hours: nil, force_endcap: nil,
+                              intraday_reporting: nil, pnl_reset: nil, cashflow_types: nil)
+          params = {
+            period: period,
+            timeframe: timeframe,
+            start: start_time,
+            end: end_time,
+            date_end: date_end,
+            extended_hours: extended_hours,
+            force_endcap: force_endcap,
+            intraday_reporting: intraday_reporting,
+            pnl_reset: pnl_reset,
+            cashflow_types: cashflow_types
+          }.compact
+          response = get_request(endpoint, 'v2/account/portfolio/history', params)
+          raise InvalidParameters, JSON.parse(response.body)['message'] if response.status == 400
+
+          PortfolioHistory.new(JSON.parse(response.body))
         end
 
         def asset(symbol:)
@@ -40,8 +97,14 @@ module Alpaca
           Asset.new(JSON.parse(response.body))
         end
 
-        def assets(status: nil, asset_class: nil)
-          response = get_request(endpoint, "v2/assets", { status: status, asset_class: asset_class }.compact)
+        def assets(status: nil, asset_class: nil, exchange: nil, attributes: nil)
+          params = {
+            status: status,
+            asset_class: asset_class,
+            exchange: exchange,
+            attributes: attributes
+          }.compact
+          response = get_request(endpoint, "v2/assets", params)
           json = JSON.parse(response.body)
           json.map { |item| Asset.new(item) }
         end
@@ -75,6 +138,21 @@ module Alpaca
             end   
           end
           hash       
+        end
+
+        def latest_trade(symbols:, feed: nil)
+          validate_symbols(symbols)
+          params = { symbols: prepare_symbols(symbols) }
+          params[:feed] = feed if feed
+          response = get_request(data_endpoint, "v2/stocks/trades/latest", params)
+          json = JSON.parse(response.body)
+
+          hash = { "next_page_token" => json["next_page_token"], "trades" => {} }
+          trades = json["trades"] || {}
+          ensure_symbols_are_array(symbols).each do |symbol|
+            hash["trades"][symbol] = Trade.new(trades[symbol]) if trades[symbol]
+          end
+          hash
         end          
 
         # {
@@ -161,8 +239,9 @@ module Alpaca
           Clock.new(JSON.parse(response.body))
         end
 
-        def close_position(symbol:)
-          response = delete_request(endpoint, "v2/positions/#{symbol}")
+        def close_position(symbol:, qty: nil, percentage: nil)
+          params = { qty: qty, percentage: percentage }.compact
+          response = delete_request(endpoint, "v2/positions/#{symbol}", params)
           raise NoPositionForSymbol, JSON.parse(response.body)['message'] if response.status == 404
           # e.g. 403 "insufficient qty available" when open orders hold shares
           raise PositionNotClosable, JSON.parse(response.body)['message'] unless (200..299).cover?(response.status)
@@ -194,7 +273,8 @@ module Alpaca
 
         def new_order(symbol:, side:, type:, time_in_force:, qty: nil, notional: nil,
           limit_price: nil, stop_price: nil, extended_hours: false, client_order_id: nil,
-          order_class: nil, take_profit: nil, stop_loss: nil)
+          order_class: nil, take_profit: nil, stop_loss: nil,
+          trail_price: nil, trail_percent: nil, position_intent: nil)
 
           params = {
             symbol: symbol,
@@ -209,7 +289,10 @@ module Alpaca
             take_profit: take_profit,
             stop_loss: stop_loss,
             extended_hours: extended_hours,
-            client_order_id: client_order_id
+            client_order_id: client_order_id,
+            trail_price: trail_price,
+            trail_percent: trail_percent,
+            position_intent: position_intent
           }
           response = post_request(endpoint, 'v2/orders', params.compact)
           raise InsufficientFunds, JSON.parse(response.body)['message'] if response.status == 403
@@ -240,15 +323,33 @@ module Alpaca
           Order.new(JSON.parse(response.body))
         end
 
-        def order(id:)
-          response = get_request(endpoint, "v2/orders/#{id}")
+        def order(id: nil, client_order_id: nil)
+          if id.nil? && client_order_id.nil?
+            raise InvalidParameters, 'id or client_order_id is required'
+          end
+
+          response = if client_order_id
+            get_request(endpoint, 'v2/orders:by_client_order_id', { client_order_id: client_order_id })
+          else
+            get_request(endpoint, "v2/orders/#{id}")
+          end
           raise InvalidOrderId, JSON.parse(response.body)['message'] if response.status == 404
 
           Order.new(JSON.parse(response.body))
         end
 
-        def orders(status: nil, symbols: nil, after: nil, until_time: nil, direction: nil, limit: 50)
-          params = { status: status, symbols:symbols, after: after, until: until_time, direction: direction, limit: limit }
+        def orders(status: nil, symbols: nil, after: nil, until_time: nil, direction: nil, limit: 50,
+                   nested: nil, side: nil)
+          params = {
+            status: status,
+            symbols: symbols,
+            after: after,
+            until: until_time,
+            direction: direction,
+            limit: limit,
+            nested: nested,
+            side: side
+          }
           response = get_request(endpoint, "v2/orders", params.compact)
           json = JSON.parse(response.body)
           json.map { |item| Order.new(item) }
@@ -265,6 +366,25 @@ module Alpaca
           response = get_request(endpoint, ["v2/positions", symbol].compact.join('/'))
           json = JSON.parse(response.body)
           json.map { |item| Position.new(item) }
+        end
+
+        def option_contract(symbol_or_id:)
+          response = get_request(endpoint, "v2/options/contracts/#{symbol_or_id}")
+          raise InvalidRequest, JSON.parse(response.body)['message'] if response.status == 404
+
+          OptionContract.new(JSON.parse(response.body))
+        end
+
+        def exercise_option(symbol_or_contract_id:, qty: nil)
+          params = { qty: qty }.compact
+          response = post_request(endpoint, "v2/positions/#{symbol_or_contract_id}/exercise", params)
+          raise NoPositionForSymbol, JSON.parse(response.body)['message'] if response.status == 404
+          raise InvalidRequest, JSON.parse(response.body)['message'] unless (200..299).cover?(response.status)
+
+          body = response.body.to_s.strip
+          return nil if body.empty?
+
+          JSON.parse(body)
         end
 
         def option_contracts(underlying_symbols:, expiration_date_gte: nil, expiration_date_lte: nil, status: 'active', limit: 500)
@@ -288,6 +408,59 @@ module Alpaca
           JSON.parse(response.body)
         end
 
+        def watchlists
+          response = get_request(endpoint, 'v2/watchlists')
+          json = JSON.parse(response.body)
+          json.map { |item| Watchlist.new(item) }
+        end
+
+        def watchlist(id: nil, name: nil)
+          if id.nil? && name.nil?
+            raise InvalidParameters, 'id or name is required'
+          end
+
+          response = if name
+            get_request(endpoint, 'v2/watchlists:by_name', { name: name })
+          else
+            get_request(endpoint, "v2/watchlists/#{id}")
+          end
+          raise InvalidRequest, JSON.parse(response.body)['message'] if response.status == 404
+
+          Watchlist.new(JSON.parse(response.body))
+        end
+
+        def create_watchlist(name:, symbols: [])
+          response = post_request(endpoint, 'v2/watchlists', { name: name, symbols: symbols })
+          Watchlist.new(JSON.parse(response.body))
+        end
+
+        def update_watchlist(id:, name: nil, symbols: nil)
+          params = { name: name, symbols: symbols }.compact
+          response = put_request(endpoint, "v2/watchlists/#{id}", params)
+          raise InvalidRequest, JSON.parse(response.body)['message'] if response.status == 404
+
+          Watchlist.new(JSON.parse(response.body))
+        end
+
+        def delete_watchlist(id:)
+          response = delete_request(endpoint, "v2/watchlists/#{id}")
+          raise InvalidRequest, JSON.parse(response.body)['message'] if response.status == 404
+        end
+
+        def add_to_watchlist(id:, symbol:)
+          response = post_request(endpoint, "v2/watchlists/#{id}", { symbol: symbol })
+          raise InvalidRequest, JSON.parse(response.body)['message'] if response.status == 404
+
+          Watchlist.new(JSON.parse(response.body))
+        end
+
+        def remove_from_watchlist(id:, symbol:)
+          response = delete_request(endpoint, "v2/watchlists/#{id}/#{symbol}")
+          raise InvalidRequest, JSON.parse(response.body)['message'] if response.status == 404
+
+          Watchlist.new(JSON.parse(response.body))
+        end
+
         def replace_order(id:, qty: nil, time_in_force: nil, limit_price: nil,
                           stop_price: nil, client_order_id: nil)
 
@@ -308,9 +481,10 @@ module Alpaca
 
         private
 
-        def delete_request(endpoint, uri)
+        def delete_request(endpoint, uri, params = {})
           conn = Faraday.new(url: endpoint)
           response = conn.delete(uri) do |req|
+            params.each { |k, v| req.params[k.to_s] = v }
             req.headers['APCA-API-KEY-ID'] = key_id
             req.headers['APCA-API-SECRET-KEY'] = key_secret
           end
@@ -326,6 +500,18 @@ module Alpaca
           end
           response = conn.get(uri) do |req|
             params.each { |k, v| req.params[k.to_s] = v }
+            req.headers['APCA-API-KEY-ID'] = key_id
+            req.headers['APCA-API-SECRET-KEY'] = key_secret
+          end
+
+          possibly_raise_exception(response)
+          response
+        end
+
+        def put_request(endpoint, uri, params = {})
+          conn = Faraday.new(url: endpoint)
+          response = conn.put(uri) do |req|
+            req.body = params.to_json
             req.headers['APCA-API-KEY-ID'] = key_id
             req.headers['APCA-API-SECRET-KEY'] = key_secret
           end

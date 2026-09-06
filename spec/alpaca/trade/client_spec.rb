@@ -584,4 +584,331 @@ RSpec.describe Alpaca::Trade::Api::Client do
       expect(positions.first).to be_an(Alpaca::Trade::Api::Position)
     end
   end
+
+  describe 'new Trading API surfaces' do
+    include WebMock::API
+
+    let(:json_headers) { { 'Content-Type' => 'application/json' } }
+
+    def stub_json(method, path, body:, status: 200, query: nil)
+      request = stub_request(method, "#{subject.endpoint}#{path}")
+      request = request.with(query: query) if query
+      request.to_return(status: status, body: body.to_json, headers: json_headers)
+    end
+
+    describe '#account_activities' do
+      it 'fetches all activity types when activity_type is omitted' do
+        stub_json(:get, '/v2/account/activities', body: [])
+        expect(subject.account_activities).to eq([])
+      end
+
+      it 'returns an empty array when the payload is null' do
+        stub_request(:get, "#{subject.endpoint}/v2/account/activities")
+          .to_return(status: 200, body: 'null', headers: json_headers)
+        expect(subject.account_activities).to eq([])
+      end
+
+      it 'classifies mixed activity types per item' do
+        stub_json(:get, '/v2/account/activities', body: [
+          {
+            'id' => 'fill-1',
+            'activity_type' => 'FILL',
+            'transaction_time' => '2026-01-01T00:00:00Z',
+            'type' => 'fill',
+            'price' => '10',
+            'qty' => '1',
+            'side' => 'buy',
+            'symbol' => 'AAPL',
+            'leaves_qty' => '0',
+            'order_id' => 'o1',
+            'cum_qty' => '1'
+          },
+          { 'id' => 'div-1', 'activity_type' => 'DIV', 'date' => '2026-01-01', 'net_amount' => '1.25' }
+        ])
+
+        activities = subject.account_activities
+        expect(activities[0]).to be_an(Alpaca::Trade::Api::TradeActivity)
+        expect(activities[1]).to be_an(Alpaca::Trade::Api::NonTradeActivity)
+      end
+    end
+
+    describe '#account_configurations' do
+      let(:config) { { 'fractional_trading' => true, 'max_margin_multiplier' => '2', 'no_shorting' => false } }
+
+      it 'returns an AccountConfiguration' do
+        stub_json(:get, '/v2/account/configurations', body: config)
+        expect(subject.account_configurations.fractional_trading).to eq(true)
+      end
+
+      it 'patches configuration values' do
+        stub_json(:patch, '/v2/account/configurations', body: config.merge('no_shorting' => true))
+        result = subject.update_account_configurations(no_shorting: true)
+        expect(result.no_shorting).to eq(true)
+      end
+    end
+
+    describe '#announcements' do
+      let(:announcement) do
+        { 'id' => 'ann-1', 'ca_type' => 'Dividend', 'initiating_symbol' => 'BAC', 'cash' => '0.21' }
+      end
+
+      it 'returns Announcement objects and joins ca_types' do
+        stub_request(:get, "#{subject.endpoint}/v2/corporate_actions/announcements")
+          .with(query: hash_including('ca_types' => 'dividend,split', 'since' => '2026-01-01', 'until' => '2026-01-31'))
+          .to_return(status: 200, body: [announcement].to_json, headers: json_headers)
+
+        result = subject.announcements(ca_types: %w[dividend split], since: '2026-01-01', until_date: '2026-01-31')
+        expect(result.first).to be_an(Alpaca::Trade::Api::Announcement)
+      end
+
+      it 'returns a single announcement' do
+        stub_json(:get, '/v2/corporate_actions/announcements/ann-1', body: announcement)
+        expect(subject.announcement(id: 'ann-1').id).to eq('ann-1')
+      end
+
+      it 'raises when an announcement is missing' do
+        stub_json(:get, '/v2/corporate_actions/announcements/missing', body: { 'message' => 'not found' }, status: 404)
+        expect { subject.announcement(id: 'missing') }.to raise_error(Alpaca::Trade::Api::InvalidRequest)
+      end
+    end
+
+    describe '#portfolio_history' do
+      it 'returns a PortfolioHistory object' do
+        stub_request(:get, "#{subject.endpoint}/v2/account/portfolio/history")
+          .with(query: hash_including('period' => '1M', 'timeframe' => '1D'))
+          .to_return(status: 200, body: {
+            'timestamp' => [1], 'equity' => [100], 'profit_loss' => [0],
+            'profit_loss_pct' => [0], 'base_value' => 100, 'timeframe' => '1D'
+          }.to_json, headers: json_headers)
+        history = subject.portfolio_history(period: '1M', timeframe: '1D')
+        expect(history).to be_an(Alpaca::Trade::Api::PortfolioHistory)
+      end
+
+      it 'raises on invalid parameters' do
+        stub_request(:get, "#{subject.endpoint}/v2/account/portfolio/history")
+          .with(query: hash_including('period' => 'bad'))
+          .to_return(status: 400, body: { 'message' => 'bad period' }.to_json, headers: json_headers)
+        expect { subject.portfolio_history(period: 'bad') }.to raise_error(Alpaca::Trade::Api::InvalidParameters)
+      end
+    end
+
+    describe '#assets' do
+      it 'forwards exchange and attributes filters' do
+        stub_request(:get, "#{subject.endpoint}/v2/assets")
+          .with(query: hash_including('exchange' => 'NASDAQ', 'attributes' => 'has_options'))
+          .to_return(status: 200, body: [{ 'id' => 'a1', 'class' => 'us_equity', 'symbol' => 'AAPL' }].to_json,
+                     headers: json_headers)
+
+        assets = subject.assets(exchange: 'NASDAQ', attributes: 'has_options')
+        expect(assets.first.symbol).to eq('AAPL')
+      end
+    end
+
+    describe '#latest_trade' do
+      let(:trade) do
+        { 't' => '2022-01-03T09:00:00Z', 'x' => 'P', 'p' => 178.26, 's' => 246, 'c' => ['@'], 'i' => 1, 'z' => 'C' }
+      end
+
+      it 'returns Trade objects for requested symbols' do
+        stub_request(:get, 'https://data.alpaca.markets/v2/stocks/trades/latest')
+          .with(query: hash_including('symbols' => 'AAPL', 'feed' => 'iex'))
+          .to_return(status: 200, body: { 'trades' => { 'AAPL' => trade } }.to_json, headers: json_headers)
+
+        result = subject.latest_trade(symbols: 'AAPL', feed: 'iex')
+        expect(result['trades']['AAPL']).to be_an(Alpaca::Trade::Api::Trade)
+        expect(result['trades']['AAPL'].price).to eq(BigDecimal('178.26'))
+      end
+
+      it 'skips symbols with no trade payload' do
+        stub_request(:get, 'https://data.alpaca.markets/v2/stocks/trades/latest')
+          .with(query: hash_including('symbols' => 'AAPL'))
+          .to_return(status: 200, body: { 'trades' => {} }.to_json, headers: json_headers)
+
+        result = subject.latest_trade(symbols: ['AAPL'])
+        expect(result['trades']).to eq({})
+      end
+
+      it 'treats a missing trades object as empty' do
+        stub_request(:get, 'https://data.alpaca.markets/v2/stocks/trades/latest')
+          .with(query: hash_including('symbols' => 'AAPL'))
+          .to_return(status: 200, body: {}.to_json, headers: json_headers)
+
+        expect(subject.latest_trade(symbols: 'AAPL')['trades']).to eq({})
+      end
+    end
+
+    describe '#close_position' do
+      it 'sends qty when closing a partial position' do
+        stub_request(:delete, "#{subject.endpoint}/v2/positions/AAPL")
+          .with(query: hash_including('qty' => '1'))
+          .to_return(status: 200, body: { 'id' => 'ord-1', 'symbol' => 'AAPL' }.to_json, headers: json_headers)
+
+        order = subject.close_position(symbol: 'AAPL', qty: 1)
+        expect(order).to be_an(Alpaca::Trade::Api::Order)
+      end
+    end
+
+    describe '#new_order' do
+      it 'sends trailing stop and position_intent fields' do
+        stub_request(:post, "#{subject.endpoint}/v2/orders")
+          .with { |req| JSON.parse(req.body)['trail_percent'] == 2 && JSON.parse(req.body)['position_intent'] == 'buy_to_open' }
+          .to_return(status: 200, body: { 'id' => 'ord-1', 'type' => 'trailing_stop' }.to_json, headers: json_headers)
+
+        order = subject.new_order(
+          symbol: 'AAPL', side: 'buy', type: 'trailing_stop', time_in_force: 'day',
+          qty: 1, trail_percent: 2, position_intent: 'buy_to_open'
+        )
+        expect(order.type).to eq('trailing_stop')
+      end
+    end
+
+    describe '#order' do
+      it 'looks up an order by client_order_id' do
+        stub_request(:get, "#{subject.endpoint}/v2/orders:by_client_order_id")
+          .with(query: hash_including('client_order_id' => 'MY_ID'))
+          .to_return(status: 200, body: { 'id' => 'ord-1', 'client_order_id' => 'MY_ID' }.to_json, headers: json_headers)
+
+        expect(subject.order(client_order_id: 'MY_ID').client_order_id).to eq('MY_ID')
+      end
+
+      it 'requires id or client_order_id' do
+        expect { subject.order }.to raise_error(Alpaca::Trade::Api::InvalidParameters)
+      end
+    end
+
+    describe '#orders' do
+      it 'forwards nested and side filters' do
+        stub_request(:get, "#{subject.endpoint}/v2/orders")
+          .with(query: hash_including('nested' => 'true', 'side' => 'buy', 'limit' => '50'))
+          .to_return(status: 200, body: [{ 'id' => 'ord-1' }].to_json, headers: json_headers)
+
+        expect(subject.orders(nested: true, side: 'buy').first.id).to eq('ord-1')
+      end
+    end
+
+    describe '#option_contract' do
+      it 'returns an OptionContract' do
+        stub_json(:get, '/v2/options/contracts/AAPL250620C00100000', body: {
+          'id' => 'c1', 'symbol' => 'AAPL250620C00100000', 'type' => 'call', 'strike_price' => '100'
+        })
+        expect(subject.option_contract(symbol_or_id: 'AAPL250620C00100000').type).to eq('call')
+      end
+
+      it 'raises when the contract is missing' do
+        stub_json(:get, '/v2/options/contracts/missing', body: { 'message' => 'not found' }, status: 404)
+        expect { subject.option_contract(symbol_or_id: 'missing') }.to raise_error(Alpaca::Trade::Api::InvalidRequest)
+      end
+    end
+
+    describe '#exercise_option' do
+      it 'returns nil for an empty success body' do
+        stub_request(:post, "#{subject.endpoint}/v2/positions/AAPL250620C00100000/exercise")
+          .to_return(status: 200, body: '', headers: json_headers)
+        expect(subject.exercise_option(symbol_or_contract_id: 'AAPL250620C00100000')).to be_nil
+      end
+
+      it 'parses a JSON success body' do
+        stub_request(:post, "#{subject.endpoint}/v2/positions/AAPL250620C00100000/exercise")
+          .to_return(status: 200, body: { 'qty_exercised' => '1' }.to_json, headers: json_headers)
+        expect(subject.exercise_option(symbol_or_contract_id: 'AAPL250620C00100000', qty: 1)['qty_exercised']).to eq('1')
+      end
+
+      it 'raises when the position is missing' do
+        stub_request(:post, "#{subject.endpoint}/v2/positions/missing/exercise")
+          .to_return(status: 404, body: { 'message' => 'not found' }.to_json, headers: json_headers)
+        expect { subject.exercise_option(symbol_or_contract_id: 'missing') }.to raise_error(Alpaca::Trade::Api::NoPositionForSymbol)
+      end
+
+      it 'raises when exercise is rejected' do
+        stub_request(:post, "#{subject.endpoint}/v2/positions/AAPL250620C00100000/exercise")
+          .to_return(status: 403, body: { 'message' => 'after hours' }.to_json, headers: json_headers)
+        expect {
+          subject.exercise_option(symbol_or_contract_id: 'AAPL250620C00100000')
+        }.to raise_error(Alpaca::Trade::Api::InvalidRequest)
+      end
+    end
+
+    describe 'watchlists' do
+      let(:watchlist) do
+        { 'id' => 'w1', 'name' => 'Primary', 'account_id' => 'a1', 'assets' => [] }
+      end
+
+      it 'lists watchlists' do
+        stub_json(:get, '/v2/watchlists', body: [watchlist])
+        expect(subject.watchlists.first).to be_an(Alpaca::Trade::Api::Watchlist)
+      end
+
+      it 'gets a watchlist by id' do
+        stub_json(:get, '/v2/watchlists/w1', body: watchlist)
+        expect(subject.watchlist(id: 'w1').id).to eq('w1')
+      end
+
+      it 'gets a watchlist by name' do
+        stub_request(:get, "#{subject.endpoint}/v2/watchlists:by_name")
+          .with(query: hash_including('name' => 'Primary'))
+          .to_return(status: 200, body: watchlist.to_json, headers: json_headers)
+        expect(subject.watchlist(name: 'Primary').name).to eq('Primary')
+      end
+
+      it 'requires id or name' do
+        expect { subject.watchlist }.to raise_error(Alpaca::Trade::Api::InvalidParameters)
+      end
+
+      it 'raises when a watchlist is missing' do
+        stub_json(:get, '/v2/watchlists/missing', body: { 'message' => 'not found' }, status: 404)
+        expect { subject.watchlist(id: 'missing') }.to raise_error(Alpaca::Trade::Api::InvalidRequest)
+      end
+
+      it 'creates a watchlist' do
+        stub_json(:post, '/v2/watchlists', body: watchlist)
+        expect(subject.create_watchlist(name: 'Primary', symbols: ['AAPL']).name).to eq('Primary')
+      end
+
+      it 'updates a watchlist' do
+        stub_request(:put, "#{subject.endpoint}/v2/watchlists/w1")
+          .to_return(status: 200, body: watchlist.merge('name' => 'Renamed').to_json, headers: json_headers)
+        expect(subject.update_watchlist(id: 'w1', name: 'Renamed').name).to eq('Renamed')
+      end
+
+      it 'raises when updating a missing watchlist' do
+        stub_request(:put, "#{subject.endpoint}/v2/watchlists/missing")
+          .to_return(status: 404, body: { 'message' => 'not found' }.to_json, headers: json_headers)
+        expect { subject.update_watchlist(id: 'missing', name: 'X') }.to raise_error(Alpaca::Trade::Api::InvalidRequest)
+      end
+
+      it 'deletes a watchlist' do
+        stub_request(:delete, "#{subject.endpoint}/v2/watchlists/w1")
+          .to_return(status: 204, body: '', headers: json_headers)
+        expect { subject.delete_watchlist(id: 'w1') }.not_to raise_error
+      end
+
+      it 'raises when deleting a missing watchlist' do
+        stub_request(:delete, "#{subject.endpoint}/v2/watchlists/missing")
+          .to_return(status: 404, body: { 'message' => 'not found' }.to_json, headers: json_headers)
+        expect { subject.delete_watchlist(id: 'missing') }.to raise_error(Alpaca::Trade::Api::InvalidRequest)
+      end
+
+      it 'adds a symbol to a watchlist' do
+        stub_json(:post, '/v2/watchlists/w1', body: watchlist)
+        expect(subject.add_to_watchlist(id: 'w1', symbol: 'AAPL')).to be_an(Alpaca::Trade::Api::Watchlist)
+      end
+
+      it 'raises when adding to a missing watchlist' do
+        stub_json(:post, '/v2/watchlists/missing', body: { 'message' => 'not found' }, status: 404)
+        expect { subject.add_to_watchlist(id: 'missing', symbol: 'AAPL') }.to raise_error(Alpaca::Trade::Api::InvalidRequest)
+      end
+
+      it 'removes a symbol from a watchlist' do
+        stub_request(:delete, "#{subject.endpoint}/v2/watchlists/w1/AAPL")
+          .to_return(status: 200, body: watchlist.to_json, headers: json_headers)
+        expect(subject.remove_from_watchlist(id: 'w1', symbol: 'AAPL')).to be_an(Alpaca::Trade::Api::Watchlist)
+      end
+
+      it 'raises when removing from a missing watchlist' do
+        stub_request(:delete, "#{subject.endpoint}/v2/watchlists/missing/AAPL")
+          .to_return(status: 404, body: { 'message' => 'not found' }.to_json, headers: json_headers)
+        expect { subject.remove_from_watchlist(id: 'missing', symbol: 'AAPL') }.to raise_error(Alpaca::Trade::Api::InvalidRequest)
+      end
+    end
+  end
 end

@@ -58,10 +58,12 @@ Here's a table with all currently supported endpoints in this library:
 |-----------------------------------------------------------------------------------------------|----------------------------------------|-------------------------------------------|
 | [Account](https://docs.alpaca.markets/api-documentation/api-v2/account/)                      | [GET] Get the account                  | Client#account                            |
 | [Account Activities](https://docs.alpaca.markets/api-documentation/api-v2/account-activities) | [GET] Get a list of account activities | Client#account_activities(activity_type:) |
+| [Account Configurations](https://docs.alpaca.markets/reference/getaccountconfig-1)            | [GET] Get account configurations       | Client#account_configurations             |
+|                                                                                               | [PATCH] Update account configurations  | Client#update_account_configurations      |
 | [Orders](https://docs.alpaca.markets/api-documentation/api-v2/orders/)                        | [GET] Get a list of orders             | Client#orders                             |
 |                                                                                               | [POST] Request a new order             | Client#new_order                          |
 |                                                                                               | [GET] Get an order                     | Client#order(id:)                         |
-|                                                                                               | [GET] Get an order by client order id  | Client#order(id:)                         |
+|                                                                                               | [GET] Get an order by client order id  | Client#order(client_order_id:)            |
 |                                                                                               | [PATCH] Replace an order               | Client#replace_order                      |
 |                                                                                               | [DELETE] Cancel all orders             | Client#cancel_orders                      |
 |                                                                                               | [DELETE] Cancel an order               | Client#cancel_order(id:)                  |
@@ -69,12 +71,26 @@ Here's a table with all currently supported endpoints in this library:
 |                                                                                               | [GET] Get an open position             | Client#position(symbol:)                  |
 |                                                                                               | [DELETE] Close all positions           | Client#close_positions                    |
 |                                                                                               | [DELETE] Close a position              | Client#close_position(symbol:)            |
+|                                                                                               | [POST] Exercise an option              | Client#exercise_option                    |
 | [Assets](https://docs.alpaca.markets/api-documentation/api-v2/assets/)                        | [GET] Get assets                       | Client#assets                             |
-|                                                                                               | [GET] Get assets/:id                   | Client#asset(symbol:)                     |
 |                                                                                               | [GET] Get an asset                     | Client#asset(symbol:)                     |
+| [Options](https://docs.alpaca.markets/reference/get-v2-options-contracts)                     | [GET] Get option contracts             | Client#option_contracts                   |
+|                                                                                               | [GET] Get an option contract           | Client#option_contract(symbol_or_id:)     |
+| [Watchlists](https://docs.alpaca.markets/reference/getwatchlists-1)                           | [GET] Get watchlists                   | Client#watchlists                         |
+|                                                                                               | [GET] Get a watchlist                  | Client#watchlist(id: or name:)            |
+|                                                                                               | [POST] Create a watchlist              | Client#create_watchlist                   |
+|                                                                                               | [PUT] Update a watchlist               | Client#update_watchlist                   |
+|                                                                                               | [DELETE] Delete a watchlist            | Client#delete_watchlist                   |
+|                                                                                               | [POST] Add a symbol                    | Client#add_to_watchlist                   |
+|                                                                                               | [DELETE] Remove a symbol               | Client#remove_from_watchlist              |
+| [Portfolio History](https://docs.alpaca.markets/reference/getaccountportfoliohistory-1)       | [GET] Get portfolio history            | Client#portfolio_history                  |
+| [Corporate Actions](https://docs.alpaca.markets/reference/getcorporateannouncements)          | [GET] Get announcements                | Client#announcements                      |
+|                                                                                               | [GET] Get an announcement              | Client#announcement(id:)                  |
 | [Calendar](https://docs.alpaca.markets/api-documentation/api-v2/calendar/)                    | [GET] Get the calendar                 | Client#calendar(start_date:, end_date:)   |
 | [Clock](https://docs.alpaca.markets/api-documentation/api-v2/clock/)                          | [GET] Get the clock                    | Client#clock                              |
-| [Bars](https://docs.alpaca.markets/api-documentation/api-v2/market-data/bars/)                | [GET] Get a list of bars               | Client#bars(timeframe, symbols, limit:)   |
+| [Bars](https://docs.alpaca.markets/api-documentation/api-v2/market-data/bars/)                | [GET] Get a list of bars               | Client#bars                               |
+| [Quotes](https://docs.alpaca.markets/reference/stocklatestquotes-1)                           | [GET] Latest quotes                    | Client#latest_quote                       |
+| [Trades](https://docs.alpaca.markets/reference/stocklatesttrades-1)                           | [GET] Latest trades                    | Client#latest_trade                       |
 
 ## Development
 

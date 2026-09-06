@@ -5,8 +5,9 @@ module Alpaca
     module Api
       class Order
         attr_reader :id, :asset_class, :asset_id, :canceled_at, :client_order_id,
-          :created_at, :expired_at, :extended_hours, :failed_at, :filled_at, :filled_avg_price,
-          :filled_qty, :legs, :limit_price, :order_class, :qty, :replaced_at, :replaced_by,
+          :created_at, :expired_at, :expires_at, :extended_hours, :failed_at, :filled_at, :filled_avg_price,
+          :filled_qty, :hwm, :legs, :limit_price, :notional, :order_class, :order_type,
+          :position_intent, :qty, :ratio_qty, :replaced_at, :replaced_by,
           :replaces, :side, :status, :stop_price, :submitted_at, :symbol, :time_in_force,
           :trail_percent, :trail_price, :type, :updated_at
 
@@ -19,15 +20,21 @@ module Alpaca
           @client_order_id = json['client_order_id']
           @created_at = json['created_at']
           @expired_at = json['expired_at']
+          @expires_at = json['expires_at']
           @extended_hours = json['extended_hours']
           @failed_at = json['failed_at']
           @filled_at = json['filled_at']
           @filled_avg_price = json['filled_avg_price']
           @filled_qty = json['filled_qty']
+          @hwm = json['hwm']
           @legs = (json['legs'] || []).map {|leg| Order.new(leg)}
           @limit_price = json['limit_price']
+          @notional = json['notional']
           @order_class = json['order_class']
+          @order_type = json['order_type']
+          @position_intent = json['position_intent']
           @qty = json['qty']
+          @ratio_qty = json['ratio_qty']
           @replaced_at = json['replaced_at']
           @replaced_by = json['replaced_by']
           @replaces = json['replaces']

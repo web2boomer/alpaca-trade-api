@@ -5,9 +5,10 @@ module Alpaca
     module Api
       class Position
         attr_reader :asset_id, :symbol, :exchange, :asset_class, :avg_entry_price,
-          :qty, :side, :market_value, :cost_basis, :unrealized_pl, :unrealized_plpc,
+          :qty, :qty_available, :side, :market_value, :cost_basis, :unrealized_pl, :unrealized_plpc,
           :unrealized_intraday_pl, :unrealized_intraday_plpc, :current_price,
-          :lastday_price, :change_today, :asset_marginable
+          :lastday_price, :change_today, :asset_marginable,
+          :swap_rate, :avg_entry_swap_rate, :usd
 
         def initialize(json)
           @asset_id = json['asset_id']
@@ -16,6 +17,7 @@ module Alpaca
           @asset_class = json['asset_class']
           @avg_entry_price = json['avg_entry_price']
           @qty = json['qty']
+          @qty_available = json['qty_available']
           @side = json['side']
           @market_value = json['market_value']
           @cost_basis = json['cost_basis']
@@ -27,6 +29,9 @@ module Alpaca
           @lastday_price = json['lastday_price']
           @change_today = json['change_today']
           @asset_marginable = json['asset_marginable']
+          @swap_rate = json['swap_rate']
+          @avg_entry_swap_rate = json['avg_entry_swap_rate']
+          @usd = json['usd']
         end
       end
     end
